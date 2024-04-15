@@ -1,87 +1,41 @@
 from faker import Faker
-from sqlalchemy import create_engine, Column, Integer, String, ForeignKey, Float
-from sqlalchemy.ext.declarative import declarative_base
-from sqlalchemy.orm import sessionmaker, relationship
+from sqlalchemy import create_engine
+from sqlalchemy.orm import sessionmaker
+from models import Base, Student, Group, Teacher, Subject, Grade
 import random
 
 fake = Faker()
 
-Base = declarative_base()
+engine = create_engine('postgresql://username:password@localhost/dbname')  # Замініть на ваші дані
+Base.metadata.bind = engine
 
-class Group(Base):
-    __tablename__ = 'groups'
-    id = Column(Integer, primary_key=True)
-    name = Column(String)
+DBSession = sessionmaker(bind=engine)
+session = DBSession()
 
-class Teacher(Base):
-    __tablename__ = 'teachers'
-    id = Column(Integer, primary_key=True)
-    name = Column(String)
+# Заповнення таблиці груп
+groups = ['Group A', 'Group B', 'Group C']
+for name in groups:
+    group = Group(name=name)
+    session.add(group)
 
-class Student(Base):
-    __tablename__ = 'students'
-    id = Column(Integer, primary_key=True)
-    name = Column(String)
-    group_id = Column(Integer, ForeignKey('groups.id'))
-    group = relationship("Group", back_populates="students")
+# Заповнення таблиці викладачів
+for _ in range(3):
+    teacher = Teacher(fullname=fake.name())
+    session.add(teacher)
 
-class Subject(Base):
-    __tablename__ = 'subjects'
-    id = Column(Integer, primary_key=True)
-    name = Column(String)
-    teacher_id = Column(Integer, ForeignKey('teachers.id'))
-    teacher = relationship("Teacher", back_populates="subjects")
-
-class Grade(Base):
-    __tablename__ = 'grades'
-    id = Column(Integer, primary_key=True)
-    student_id = Column(Integer, ForeignKey('students.id'))
-    student = relationship("Student", back_populates="grades")
-    subject_id = Column(Integer, ForeignKey('subjects.id'))
-    subject = relationship("Subject", back_populates="grades")
-    score = Column(Float)
-
-Group.students = relationship("Student", back_populates="group")
-Teacher.subjects = relationship("Subject", back_populates="teacher")
-Student.grades = relationship("Grade", back_populates="student")
-Subject.grades = relationship("Grade", back_populates="subject")
-
-engine = create_engine('postgresql://username:password@localhost/dbname')
-Base.metadata.create_all(engine)
-
-Session = sessionmaker(bind=engine)
-session = Session()
-
-# Add groups
-groups = [Group(name=fake.word()) for _ in range(3)]
-session.add_all(groups)
-session.commit()
-
-# Add teachers
-teachers = [Teacher(name=fake.name()) for _ in range(3)]
-session.add_all(teachers)
-session.commit()
-
-# Add students
-students = []
+# Заповнення таблиці студентів
 for _ in range(30):
-    student = Student(name=fake.name(), group=random.choice(groups))
-    students.append(student)
-session.add_all(students)
-session.commit()
+    student = Student(fullname=fake.name())
+    session.add(student)
 
-# Add subjects
-subjects = []
+# Заповнення таблиць предметів та оцінок
 for _ in range(5):
-    subject = Subject(name=fake.word(), teacher=random.choice(teachers))
-    subjects.append(subject)
-session.add_all(subjects)
-session.commit()
-
-# Add grades
-for student in students:
-    for subject in subjects:
-        score = round(random.uniform(60, 100), 2)
-        grade = Grade(student=student, subject=subject, score=score)
+    subject_name = fake.word()
+    teacher_id = random.randint(1, 3)
+    subject = Subject(name=subject_name, teacher_id=teacher_id)
+    session.add(subject)
+    for student in session.query(Student).all():
+        grade = Grade(student_id=student.id, subject_id=subject.id, value=random.uniform(4, 10))
         session.add(grade)
+
 session.commit()
